@@ -1,0 +1,2 @@
+FONCTION PLACE STRUCTURE
+    Ne pas placer les feuilles une par une, créer une copie temporaire du noeud fils UNIQUEMENT si le placement dans ce noeud le modifie. Canoniser une fois que toutes les feuilles ont été placées.
