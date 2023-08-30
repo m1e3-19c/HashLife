@@ -203,27 +203,51 @@ node *get_centre(node *qt, hashlife *hl)
 node *aux_change_square(node *qt, hashlife *hl, int x, int y, int value)
 {
     // Fonction auxiliaire pour inverser la couleur de la case de coordonnées (x, y) dans l'arbre (en partant du coin en haut à gauche)
-    if (qt->level == 0) // Feuille noire
+    if (qt->level <= 0)
     {
-        if (value == -1 || value == -2) // Inversion de couleur ou passage en blanc
-            return blank_canonical(0, hl);
+        if (value == LEAF_DEAD)
+            return hl->blank_nodes[0] ;
+
+        node *res = (node *)malloc(sizeof(node)) ;
+        res->nw = NULL ;
+        res->ne = NULL ;
+        res->sw = NULL ;
+        res->ne = NULL ;
+        if (value != LEAF_SWITCH)
+            res->level = value ;
         else
-            return qt;
-    }
-    else if (qt->level == -1) // Feuille blanche
-    {
-        if (value == 0 || value == -2) // Inversion ou passage en noir
         {
-            node *n = (node *)malloc(sizeof(node));
-            n->level = 0;
-            n->nw = NULL;
-            n->ne = NULL;
-            n->sw = NULL;
-            n->se = NULL;
-            return canonicalise(n, hl);
+            if (hl->automaton == AUTOMATON_WIREWORLD)
+            {
+                switch (qt->level)
+                {
+                    case LEAF_ALIVE :
+                        res->level = LEAF_ELECTRON_HEAD ;
+                        break ;
+                    case LEAF_ELECTRON_HEAD :
+                        res->level = LEAF_ELECTRON_TAIL ;
+                        break ;
+                    case LEAF_ELECTRON_TAIL :
+                        res->level = LEAF_DEAD ;
+                        break ;
+                    case LEAF_DEAD :
+                        res->level = LEAF_ALIVE ;
+                        break ;
+
+                    default :
+                        break ;
+                }
+            }
+            else
+            {
+                if (qt->level == LEAF_ALIVE)
+                    res->level = LEAF_DEAD ;
+                else
+                    res->level = LEAF_ALIVE ;
+            }
         }
-        else
-            return qt;
+        
+        return canonicalise(res, hl) ;
     }
     else // Il faut descendre
     {
@@ -260,7 +284,7 @@ void change_square(hashlife *hl, int x, int y)
     // Inverse la couleur de la case de coordonnées (x, y) dans l'arbre (en partant du coin en haut à gauche)
     int l = 1 << hl->root->level;
     if (x >= 0 && y >= 0 && x < l && y < l)                   // On s'assure que la case est bien dans l'arbre
-        hl->root = aux_change_square(hl->root, hl, x, y, -2); // Inversion
+        hl->root = aux_change_square(hl->root, hl, x, y, LEAF_SWITCH); // Inversion
 }
 
 void set_square(hashlife *hl, int x, int y, int value)
@@ -298,7 +322,7 @@ node *get_leaf(node *qt, int x, int y)
 void random_config(hashlife *hl)
 {
     // Remplace le monde par une configuration aléatoire
-    node *qt = random_node(hl->root->level - 2, 30, hl);
+    node *qt = random_node(hl->root->level - 2, 1, hl);
     hl->root = blank_border(blank_border(qt, hl), hl);
     hl->gen = 0;
 }
@@ -381,8 +405,8 @@ void aux_place_structure(hashlife *hl, int x, int y, node *structure)
 {
     if (structure->level <= 0)
     {
-        if (structure->level == 0)
-            set_square(hl, x, y, 0) ;
+        if (structure->level != -1)
+            set_square(hl, x, y, structure->level) ;
     }
     else
     {

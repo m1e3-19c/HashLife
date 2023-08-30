@@ -14,12 +14,12 @@
 
 #include "Hashtable.h"
 
-game *new_game(int w, int h, float square_size, int fps, int world_level)
+game *new_game(int w, int h, float square_size, int fps, int world_level, int automaton)
 {
     // ATTENTION : world_level > 2 !
     game *g = (game *)malloc(sizeof(game)) ;
     g->gen = 0 ;
-    g->world = create_hashlife(world_level) ;
+    g->world = create_hashlife(world_level, automaton) ;
     // g->world->root = rle_to_node("Structures/otcametapixel.rle", g->world) ;
 
     g->screen = create_screen(w, h, "The Game of Life") ;
@@ -61,11 +61,20 @@ void print_square(game *g, int x, int y)
     }
 }
 
-void print_aux(game *g, node *qt, float x, float y)
+void print_aux(game *g, node *qt, float x, float y, int automaton)
 {
     // Fonction auxiliaire pour l'affichage du monde, x et y représentent les coordonnées sur l'écran du coin supérieur gauche de l'arbre considéré
-    if (qt->level == 0) // Cellule de niveau 0 noire
+    if (qt->level <= 0 && qt->level != -1) // Cellule de niveau 0 non vide
     {
+        if (automaton == AUTOMATON_WIREWORLD)
+        {
+            if (qt->level == LEAF_ALIVE) // wire
+                SDL_SetRenderDrawColor(g->screen->renderer, 255, 200, 0, SDL_ALPHA_OPAQUE) ;
+            else if (qt->level == LEAF_ELECTRON_HEAD) // electron head
+                SDL_SetRenderDrawColor(g->screen->renderer, 0, 150, 190, SDL_ALPHA_OPAQUE) ;
+            else if (qt->level == LEAF_ELECTRON_TAIL) // electron tail
+                SDL_SetRenderDrawColor(g->screen->renderer, 130, 70, 0, SDL_ALPHA_OPAQUE) ;
+        }
         print_square(g, (int)x, (int)y) ;
     }
     else if (qt->level > 0 && g->world->blank_nodes[qt->level] != qt) // Cellule de niveau supérieur non vierge : on affiche les sous-cellules à l'endroit approprié
@@ -87,10 +96,10 @@ void print_aux(game *g, node *qt, float x, float y)
 
             if (SDL_HasIntersection(&a, &b))
             {
-                print_aux(g, qt->nw, x, y) ;
-                print_aux(g, qt->ne, x + l, y) ;
-                print_aux(g, qt->sw, x, y + l) ;
-                print_aux(g, qt->se, x + l, y + l) ;
+                print_aux(g, qt->nw, x, y, automaton) ;
+                print_aux(g, qt->ne, x + l, y, automaton) ;
+                print_aux(g, qt->sw, x, y + l, automaton) ;
+                print_aux(g, qt->se, x + l, y + l, automaton) ;
             }
         }
     }
@@ -103,11 +112,12 @@ void print_game_area(game *g, int x, int y)
     int chunk_length = 32 ; 
     int l = chunk_length * g->square_size ;
     SDL_Rect r  = {x, y, world_length * g->square_size, world_length * g->square_size} ;
-    SDL_SetRenderDrawColor(g->screen->renderer, 255, 255, 255, SDL_ALPHA_OPAQUE) ;
+
+    SDL_SetRenderDrawColor(g->screen->renderer, 30, 30, 30, SDL_ALPHA_OPAQUE) ; // dark background color
     SDL_RenderFillRect(g->screen->renderer, &r) ;
 
     // Affichage des petites parcelles si l'on a assez zoomé :
-    SDL_SetRenderDrawColor(g->screen->renderer, 227, 227, 227, SDL_ALPHA_OPAQUE) ;
+    SDL_SetRenderDrawColor(g->screen->renderer, 40, 40, 40, SDL_ALPHA_OPAQUE) ; // a liitle lighter
     
     if (g->square_size > 4.)
     {
@@ -137,7 +147,7 @@ void print_game_area(game *g, int x, int y)
 void print_grid(game *g, int x, int y)
 {
     // Affiche la grille par dessus le monde (coordonnées du coin supérieur gauche : x, y) :
-    SDL_SetRenderDrawColor(g->screen->renderer, 197, 197, 197, SDL_ALPHA_OPAQUE) ;
+    SDL_SetRenderDrawColor(g->screen->renderer, 16, 16, 16, SDL_ALPHA_OPAQUE) ;
     int x_orig = (x % (int)g->square_size) - g->square_size ;
     int y_orig = (y % (int)g->square_size) - g->square_size ;
     int x_min = max(0, x) ;
@@ -167,8 +177,8 @@ void print_game(game *g)
     print_game_area(g, x, y) ;
 
     // Détermination des coordonnées du monde sur l'écran :
-    SDL_SetRenderDrawColor(g->screen->renderer, 0, 0, 0, SDL_ALPHA_OPAQUE) ;
-    print_aux(g, g->world->root, x, y) ; // Affichage du monde depuis la racine
+    SDL_SetRenderDrawColor(g->screen->renderer, 255, 255, 255, SDL_ALPHA_OPAQUE) ;
+    print_aux(g, g->world->root, x, y, g->world->automaton) ; // Affichage du monde depuis la racine
 
     if (g->square_size >= 4.)
         print_grid(g, x, y) ;
@@ -188,7 +198,7 @@ void edit(game *g, int x, int y)
 
     if (g->edition_mode)
     {
-        if (g->struct_index == 0) // Fonction gomme
+        if (g->struct_index == 0) // eraser
             place_node(g->world, x_world, y_world, g->struct_index, g->rotation) ;
         else
             place_structure(g->world, x_world, y_world, g->struct_index, g->rotation, g->precise_coords) ;
@@ -363,19 +373,20 @@ void run(game *g)
 
 int main(int argc, char **argv)
 {
-    if (argc == 2)
+    if (argc == 3)
     {
         srand(time(NULL)) ; // Random seed
         
         int p = atoi(argv[1]); // Taille du monde
-        game *g = new_game(800, 600, 5, 8, p) ; // Jeu
+        int automaton = atoi(argv[2]) ;
+        game *g = new_game(800, 600, 5, 8, p, automaton) ; // Jeu
 
         run(g) ;
 
         free_game(g) ;
     }
     else
-        printf("Il faut entrer un seul argument : la taille du monde\n") ;
+        printf("Il faut entrer deux arguments : la taille du monde et l'automate voulu\n") ;
 
     return 0 ;
 }

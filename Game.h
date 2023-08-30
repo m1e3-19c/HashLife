@@ -26,13 +26,13 @@ typedef struct game
     int rotation ;
 } game ;
 
-game *new_game(int w, int h, float square_size, int fps, int world_level) ;
+game *new_game(int w, int h, float square_size, int fps, int world_level, int automaton) ;
 void free_game(game *g) ;
 
 /// Affichage d'une cellule noire de niveau 0
 void print_square(game *g, int x, int y) ;
 /// Fonction auxiliaire pour l'affichage du monde. Affiche le noeud qt à la position (x, y) (coin supérieur gauche)
-void print_aux(game *g, node *qt, float x, float y) ;
+void print_aux(game *g, node *qt, float x, float y, int automaton) ;
 
 /// Affichage du monde
 void print_game(game *g) ;

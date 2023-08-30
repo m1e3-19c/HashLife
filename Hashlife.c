@@ -92,23 +92,39 @@ node *canonicalise(node *qt, hashlife *hl)
 void load_structures(hashlife *hl)
 {
     // Importation des strucures depuis les fichiers
-    hl->nb_structures = 8 ;
-    hl->structures = (node ***)malloc(hl->nb_structures * sizeof(node **)) ;
-    for (int i = 0 ; i < hl->nb_structures ; ++i)
-        hl->structures[i] = (node **)malloc(NB_ROTATIONS * sizeof(node *)) ;
-    
-    hl->structures[1][0] = file_to_node("Structures/Glider_gun_30.node", hl) ;
-    hl->structures[2][0] = file_to_node("Structures/Glider_gun_60.node", hl) ; 
-    hl->structures[3][0] = file_to_node("Structures/Glider_gun_and_eater.node", hl) ;
-    hl->structures[4][0] = file_to_node("Structures/Reflector_snark.node", hl) ;
-    hl->structures[5][0] = file_to_node("Structures/Breeder1.node", hl) ;
-    // hl->structures[5][0] = rle_to_node("Structures/Breeder1.rle", hl) ;
-    hl->structures[6][0] = file_to_node("Structures/Metapixel_on.node", hl) ;
-    hl->structures[7][0] = file_to_node("Structures/Metapixel_off.node", hl) ;
-    // hl->structures[8][0] = file_to_node("Structures/Metapixel_blank.node", hl) ;
-    // hl->structures[9] = canonicalise(file_to_node("Structures/Metapixel_galaxy.node", hl), hl) ;
+    hl->nb_structures = 1 ;
+    if (hl->automaton == AUTOMATON_CONWAY_LIFE)
+    {
+        hl->nb_structures += 5 ;
+        hl->structures = (node ***)malloc(hl->nb_structures * sizeof(node **)) ;
+        for (int i = 0 ; i < hl->nb_structures ; ++i)
+            hl->structures[i] = (node **)malloc(NB_ROTATIONS * sizeof(node *)) ;
+        
+        hl->structures[1][0] = file_to_node("Structures/Conway_Life/Glider_gun_30.node", hl) ;
+        hl->structures[2][0] = file_to_node("Structures/Conway_Life/Glider_gun_60.node", hl) ; 
+        hl->structures[3][0] = file_to_node("Structures/Conway_Life/Glider_gun_and_eater.node", hl) ;
+        hl->structures[4][0] = file_to_node("Structures/Conway_Life/Reflector_snark.node", hl) ;
+        hl->structures[5][0] = file_to_node("Structures/Conway_Life/Breeder1.node", hl) ;
+        // hl->structures[5][0] = rle_to_node("Structures/Conway_Life/Breeder1.rle", hl) ;
+        // hl->structures[6][0] = file_to_node("Structures/Conway_Life/Metapixel_on.node", hl) ;
+        // hl->structures[7][0] = file_to_node("Structures/Conway_Life/Metapixel_off.node", hl) ;
+        // hl->structures[8][0] = file_to_node("Structures/Conway_Life/Metapixel_blank.node", hl) ;
+        // hl->structures[9] = canonicalise(file_to_node("Structures/Conway_Life/Metapixel_galaxy.node", hl), hl) ;
+    }
+    else if (hl->automaton == AUTOMATON_WIREWORLD)
+    {
+        hl->nb_structures += 3 ;
+        hl->structures = (node ***)malloc(hl->nb_structures * sizeof(node **)) ;
+        for (int i = 0 ; i < hl->nb_structures ; ++i)
+            hl->structures[i] = (node **)malloc(NB_ROTATIONS * sizeof(node *)) ;
 
-    hl->structures[0][0] = blank_canonical(5, hl);
+        hl->structures[1][0] = file_to_node("Structures/WireWorld/Binary_adder.node", hl) ;
+        hl->structures[2][0] = file_to_node("Structures/WireWorld/Serial_adder.node", hl) ;
+        hl->structures[3][0] = file_to_node("Structures/WireWorld/Cross_wires.node", hl) ;
+    }
+    
+
+    hl->structures[0][0] = blank_canonical(4, hl);
 
     for (int i = 0 ; i < hl->nb_structures ; ++i)
     {
@@ -122,13 +138,16 @@ void load_structures(hashlife *hl)
     }
 }
 
-hashlife *create_hashlife(int level)
+hashlife *create_hashlife(int level, int automaton)
 {
     // Création d'une structure Hashlife vierge
 
     level = max(3, level); // le monde doit être de niveau supérieur ou égal à 3 (déjà pour que ça soit intéressant, puis parce que l'on fait l'aléatoire sur deux niveaux en dessous (pour garder des grandes marges blanches))
 
     hashlife *hl = (hashlife *)malloc(sizeof(hashlife)); // pointeur principal
+    hl->automaton = automaton ;
+
+    printf("automaton %d\n", hl->automaton) ;
 
     // Tables de hachage
     hl->can_tab = create_hashtable(3);
@@ -155,25 +174,51 @@ hashlife *create_hashlife(int level)
 
 /*---------------------------------------------------*/
 // CALCUL DE L'EVOLUTION :
-int rules(node *qt, int nb_neighbours)
+int rules(node *qt, int nb_neighbours, int automaton)
 {
-    int res = -1 ;
+    int res = LEAF_DEAD ;
+    
+    switch (automaton)
+    {
+    case AUTOMATON_CONWAY_LIFE : 
+        if (nb_neighbours == 3 || (nb_neighbours == 2 && qt->level == LEAF_ALIVE))
+            res = LEAF_ALIVE ;
+        break;
+    
+    case AUTOMATON_WIREWORLD : 
+        switch (qt->level)
+        {   
+        case LEAF_ALIVE : // wire
+            if (nb_neighbours == 1 || nb_neighbours == 2)
+                res = LEAF_ELECTRON_HEAD ;// becomes an electron head
+            else
+                res = LEAF_ALIVE ;
+            break ;
+        case LEAF_ELECTRON_HEAD : // electron head
+            res = LEAF_ELECTRON_TAIL ; // becomes and electron tail
+            break ;
+        case LEAF_ELECTRON_TAIL : // electron tail
+            res = LEAF_ALIVE ; // becomes a wire
+            break ;
+        
+        default:
+            break;
+        }
+        break ;
 
-    // Règles classiques :
-    if (nb_neighbours == 3 || (nb_neighbours == 2 && qt->level == 0))
-        res = 0 ; // la cellule devient vivante
+    case AUTOMATON_DAY_AND_NIGHT :
+        if (nb_neighbours == 3 || nb_neighbours == 6 || nb_neighbours == 7 || nb_neighbours == 8 || (nb_neighbours == 4 && qt->level == 0))
+            res = LEAF_ALIVE ;
+        break ;
 
+    case AUTOMATON_LIFE_3_4 :
+        if (nb_neighbours == 3 || nb_neighbours == 4)
+            res = LEAF_ALIVE ;
+        break ;
 
-    // Day and NIght :
-    // if (nb_neighbours == 3 || nb_neighbours == 6 || nb_neighbours == 7 || nb_neighbours == 8 || (nb_neighbours == 4 && qt->level == 0))
-    //     res = 0 ; // La cellule devient vivante
-
-
-    // Life 3-4 :
-    // res = -1 ;
-    // if (nb_neighbours == 3 || nb_neighbours == 4)
-    //     res = 0 ;
-
+    default:
+        break;
+    }
 
     return res ;
 }
@@ -222,16 +267,30 @@ node *compute_rules(node *qt, hashlife *hl)
 
     // Étant donné qu'un noeud blanc est de niveau -1 et un noeud noir de niveau 0, on remarque que
     // l'on a la somme du nombre de voisins d'une feuille en sommant les niveaux de ses voisins et en ajoutant 8
-    int nb_alive6 = n1->level + n2->level + n3->level + n7->level + n11->level + n10->level + n9->level + n5->level + 8;
-    int nb_alive7 = n2->level + n3->level + n4->level + n8->level + n12->level + n11->level + n10->level + n6->level + 8;
-    int nb_alive10 = n5->level + n6->level + n7->level + n11->level + n15->level + n14->level + n13->level + n9->level + 8;
-    int nb_alive11 = n6->level + n7->level + n8->level + n12->level + n16->level + n15->level + n14->level + n10->level + 8;
+    node *neighbouring_cells_6[8]  = {n1, n2, n3, n5, n7, n9, n10, n11} ;
+    node *neighbouring_cells_7[8]  = {n2, n3, n4, n6, n8, n10, n11, n12} ;
+    node *neighbouring_cells_10[8] = {n5, n6, n7, n9, n11, n13, n14, n15} ;
+    node *neighbouring_cells_11[8] = {n6, n7, n8, n10, n12, n14, n15, n16} ;
+
+    int nb_alive6 = 0, nb_alive7 = 0, nb_alive10 = 0, nb_alive11 = 0 ;
+    for (int i = 0 ; i < 8 ; ++i)
+    {
+        if ((hl->automaton == AUTOMATON_WIREWORLD && neighbouring_cells_6[i]->level == LEAF_ELECTRON_HEAD) || (hl->automaton != AUTOMATON_WIREWORLD && neighbouring_cells_6[i]->level == LEAF_ALIVE))
+            nb_alive6++ ;
+        if ((hl->automaton == AUTOMATON_WIREWORLD && neighbouring_cells_7[i]->level == LEAF_ELECTRON_HEAD) || (hl->automaton != AUTOMATON_WIREWORLD && neighbouring_cells_7[i]->level == LEAF_ALIVE))
+            nb_alive7++ ;
+        if ((hl->automaton == AUTOMATON_WIREWORLD && neighbouring_cells_10[i]->level == LEAF_ELECTRON_HEAD) || (hl->automaton != AUTOMATON_WIREWORLD && neighbouring_cells_10[i]->level == LEAF_ALIVE))
+            nb_alive10++ ;
+        if ((hl->automaton == AUTOMATON_WIREWORLD && neighbouring_cells_11[i]->level == LEAF_ELECTRON_HEAD) || (hl->automaton != AUTOMATON_WIREWORLD && neighbouring_cells_11[i]->level == LEAF_ALIVE))
+            nb_alive11++ ;
+    }
+        
 
     // Création des nouveaux noeuds
-    res->nw->level = rules(n6, nb_alive6);
-    res->ne->level = rules(n7, nb_alive7);
-    res->sw->level = rules(n10, nb_alive10);
-    res->se->level = rules(n11, nb_alive11);
+    res->nw->level = rules(n6, nb_alive6, hl->automaton);
+    res->ne->level = rules(n7, nb_alive7, hl->automaton);
+    res->sw->level = rules(n10, nb_alive10, hl->automaton);
+    res->se->level = rules(n11, nb_alive11, hl->automaton);
 
     return canonicalise(res, hl); // Ne surtout pas créer de doublon
 }
